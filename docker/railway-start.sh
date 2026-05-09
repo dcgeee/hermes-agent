@@ -76,14 +76,23 @@ if [ -d "$INSTALL_DIR/skills" ]; then
     python3 "$INSTALL_DIR/tools/skills_sync.py" 2>/dev/null || true
 fi
 
-# ── 7. 写入模型配置 ──
+# ── 7. 可选：从 Railway Variable 引导 OAuth 登录态 ──
+# openai-codex / nous 等 OAuth provider 不使用 API key；它们需要 auth.json。
+# Railway startCommand 绕过 entrypoint.sh，所以这里也要支持首次启动写入 auth.json。
+if [ ! -f "$HERMES_HOME/auth.json" ] && [ -n "${HERMES_AUTH_JSON_BOOTSTRAP:-}" ]; then
+    printf '%s' "$HERMES_AUTH_JSON_BOOTSTRAP" > "$HERMES_HOME/auth.json"
+    chmod 600 "$HERMES_HOME/auth.json" 2>/dev/null || true
+    echo "Bootstrapped auth.json from HERMES_AUTH_JSON_BOOTSTRAP"
+fi
+
+# ── 8. 写入模型配置 ──
 echo "Configuring model..."
 hermes config set model.default "${HERMES_MODEL:-deepseek-v4-pro}"
 hermes config set model.provider "${HERMES_PROVIDER:-custom}"
 hermes config set model.base_url "${HERMES_BASE_URL:-https://api.deepseek.com}"
-hermes config set model.api_key "${DEEPSEEK_API_KEY:-}"
+hermes config set model.api_key "${HERMES_API_KEY:-${DEEPSEEK_API_KEY:-}}"
 
-# ── 8. Railway healthcheck 需要 API Server 监听 /health ──
+# ── 9. Railway healthcheck 需要 API Server 监听 /health ──
 # Railway 只会把外部流量转发到 $PORT；api_server 默认不启用且默认只适合本地。
 # 显式启用并绑定 0.0.0.0:$PORT，避免 /health 返回 service unavailable。
 export API_SERVER_ENABLED="true"
