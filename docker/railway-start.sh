@@ -83,5 +83,17 @@ hermes config set model.provider "${HERMES_PROVIDER:-custom}"
 hermes config set model.base_url "${HERMES_BASE_URL:-https://api.deepseek.com}"
 hermes config set model.api_key "${DEEPSEEK_API_KEY:-}"
 
+# ── 8. Railway healthcheck 需要 API Server 监听 /health ──
+# Railway 只会把外部流量转发到 $PORT；api_server 默认不启用且默认只适合本地。
+# 显式启用并绑定 0.0.0.0:$PORT，避免 /health 返回 service unavailable。
+export API_SERVER_ENABLED="true"
+export API_SERVER_HOST="0.0.0.0"
+export API_SERVER_PORT="${PORT:-${API_SERVER_PORT:-8642}}"
+
+echo "Configuring API server healthcheck listener on ${API_SERVER_HOST}:${API_SERVER_PORT}..."
+hermes config set platforms.api_server.enabled true
+hermes config set platforms.api_server.extra.host "$API_SERVER_HOST"
+hermes config set platforms.api_server.extra.port "$API_SERVER_PORT"
+
 echo "=== Starting Hermes Gateway ==="
 exec hermes gateway run
