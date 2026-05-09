@@ -90,10 +90,29 @@ export API_SERVER_ENABLED="true"
 export API_SERVER_HOST="0.0.0.0"
 export API_SERVER_PORT="${PORT:-${API_SERVER_PORT:-8642}}"
 
+# api_server refuses to bind to a public interface without an API key. Railway
+# healthchecks do not need the key, but the server will not start unless one is
+# configured. Prefer a Railway-provided API_SERVER_KEY; otherwise generate a
+# persistent random key in the mounted HERMES_HOME volume.
+if [ -z "${API_SERVER_KEY:-}" ]; then
+    api_key_file="$HERMES_HOME/api_server.key"
+    if [ -f "$api_key_file" ]; then
+        API_SERVER_KEY="$(cat "$api_key_file")"
+        echo "Loaded existing API_SERVER_KEY from $api_key_file"
+    else
+        API_SERVER_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+        printf '%s\n' "$API_SERVER_KEY" > "$api_key_file"
+        chmod 600 "$api_key_file" 2>/dev/null || true
+        echo "Generated API_SERVER_KEY and stored it in $api_key_file"
+    fi
+fi
+export API_SERVER_KEY
+
 echo "Configuring API server healthcheck listener on ${API_SERVER_HOST}:${API_SERVER_PORT}..."
 hermes config set platforms.api_server.enabled true
 hermes config set platforms.api_server.extra.host "$API_SERVER_HOST"
 hermes config set platforms.api_server.extra.port "$API_SERVER_PORT"
+hermes config set platforms.api_server.extra.key "$API_SERVER_KEY"
 
 echo "=== Starting Hermes Gateway ==="
 exec hermes gateway run
